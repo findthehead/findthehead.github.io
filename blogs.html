@@ -350,7 +350,7 @@ async function loadBlogList() {
         for (const post of blogPosts) {
             const dateStr = post.date
                 ? new Date(post.date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
-                : 'Date not specified';
+                : new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
             let tagsHtml = '';
             if (post.tags.length > 0) {
