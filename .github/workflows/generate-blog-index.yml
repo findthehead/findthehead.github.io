@@ -1,0 +1,25 @@
+name: Generate Blog Index
+
+on:
+  push:
+    paths:
+      - "blogs/**/*.md"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Generate index.json
+        run: |
+          cd blogs
+          ls *.md | sort -r | jq -R . | jq -s . > index.json
+
+      - name: Commit index.json
+        uses: EndBug/add-and-commit@v9
+        with:
+          message: "Auto-update blog index"
+          add: "blogs/index.json"
