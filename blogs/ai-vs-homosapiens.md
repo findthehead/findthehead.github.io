@@ -1,1 +1,1 @@
-# ai-vs-homosapiens
+# AI vs Homo Sapiens
