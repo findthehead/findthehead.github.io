@@ -284,186 +284,159 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     
-    <script>
-    async function loadBlogList() {
-        try {
-            const response = await fetch('blogs/index.json', { cache: 'no-store' });
-    
-            if (!response.ok) {
-                throw new Error('Blog index not found');
-            }
-    
-            const markdownFiles = await response.json();
-    
-            if (Array.isArray(markdownFiles) && markdownFiles.length > 0) {
-                await renderBlogList(markdownFiles);
-            } else {
-                renderNoBlogsFound();
-            }
-    
-        } catch (error) {
-            console.error('Failed to load blog index:', error);
+<script>
+async function loadBlogList() {
+    const blogList = document.getElementById('blog-list');
+
+    try {
+        const response = await fetch('blogs/index.json', { cache: 'no-store' });
+        if (!response.ok) throw new Error('Blog index not found');
+
+        const markdownFiles = await response.json();
+        if (!Array.isArray(markdownFiles) || markdownFiles.length === 0) {
             renderNoBlogsFound();
+            return;
+        }
+
+        const blogPosts = [];
+
+        for (const file of markdownFiles) {
+            try {
+                const mdResponse = await fetch(`blogs/${file}`);
+                if (!mdResponse.ok) continue;
+
+                const content = await mdResponse.text();
+                const { frontmatter, markdown } = parseMarkdownWithFrontmatter(content);
+
+                // Generate excerpt
+                let excerpt = frontmatter.excerpt || '';
+                if (!excerpt) {
+                    const firstParagraph = markdown.split('\n\n')[0];
+                    excerpt = firstParagraph.replace(/[#*`]/g, '').substring(0, 200) + '...';
+                }
+
+                // Generate title from frontmatter or filename
+                const title = frontmatter.title
+                    || file.replace('.md', '').replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+
+                blogPosts.push({
+                    file,
+                    title,
+                    date: frontmatter.date || null,
+                    author: frontmatter.author || 'Author',
+                    excerpt,
+                    tags: frontmatter.tags || []
+                });
+
+            } catch (e) {
+                console.error(`Error loading ${file}:`, e);
+            }
+        }
+
+        if (blogPosts.length === 0) {
+            renderNoBlogsFound();
+            return;
+        }
+
+        // Sort by date (newest first)
+        blogPosts.sort((a, b) => {
+            if (!a.date) return 1;
+            if (!b.date) return -1;
+            return new Date(b.date) - new Date(a.date);
+        });
+
+        // Render posts
+        let html = '';
+        for (const post of blogPosts) {
+            const dateStr = post.date
+                ? new Date(post.date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+                : 'Date not specified';
+
+            let tagsHtml = '';
+            if (post.tags.length > 0) {
+                tagsHtml = '<div class="mb-2">';
+                post.tags.forEach(tag => {
+                    tagsHtml += `<span class="badge bg-dark me-1">${tag}</span>`;
+                });
+                tagsHtml += '</div>';
+            }
+
+            html += `
+                <div class="blog-list-item">
+                    <h3><a href="blog.html?post=${post.file}">${post.title}</a></h3>
+                    <p class="blog-date">${dateStr}</p>
+                    ${tagsHtml}
+                    <p>${post.excerpt}</p>
+                    <a href="blog.html?post=${post.file}" class="btn btn-outline-primary">Read Full Post</a>
+                </div>
+            `;
+        }
+
+        blogList.innerHTML = html;
+
+    } catch (error) {
+        console.error('Failed to load blog index:', error);
+        renderNoBlogsFound();
+    }
+}
+
+function parseMarkdownWithFrontmatter(content) {
+    const frontmatterMatch = content.match(/^---\s*\n([\s\S]*?)\n---\s*\n([\s\S]*)$/);
+
+    if (frontmatterMatch) {
+        try {
+            const frontmatter = jsyaml.load(frontmatterMatch[1]);
+            const markdown = frontmatterMatch[2];
+            return { frontmatter, markdown };
+        } catch (e) {
+            console.error('Error parsing frontmatter:', e);
+            return { frontmatter: {}, markdown: content };
         }
     }
 
-        function parseMarkdownWithFrontmatter(content) {
-            const frontmatterMatch = content.match(/^---\s*\n([\s\S]*?)\n---\s*\n([\s\S]*)$/);
-            
-            if (frontmatterMatch) {
-                try {
-                    const frontmatter = jsyaml.load(frontmatterMatch[1]);
-                    const markdown = frontmatterMatch[2];
-                    return { frontmatter, markdown };
-                } catch (e) {
-                    console.error('Error parsing frontmatter:', e);
-                    return { frontmatter: {}, markdown: content };
-                }
-            }
-            
-            return { frontmatter: {}, markdown: content };
+    return { frontmatter: {}, markdown: content };
+}
+
+function renderNoBlogsFound() {
+    document.getElementById('blog-list').innerHTML = `
+        <div class="text-center">
+            <i class="fas fa-file-alt fa-4x text-muted mb-3"></i>
+            <h3>No Blog Posts Found</h3>
+        </div>
+    `;
+}
+
+// Load blog list when page loads
+document.addEventListener('DOMContentLoaded', loadBlogList);
+
+// Dark Mode Functionality
+function initDarkMode() {
+    const darkModeToggle = document.getElementById('darkModeToggle');
+    if (!darkModeToggle) return;
+
+    const body = document.body;
+    const icon = darkModeToggle.querySelector('i');
+
+    const isDarkMode = localStorage.getItem('darkMode') === 'true';
+    if (isDarkMode) {
+        body.setAttribute('data-theme', 'dark');
+        icon.className = 'fas fa-sun';
+    }
+
+    darkModeToggle.addEventListener('click', () => {
+        const isCurrentlyDark = body.getAttribute('data-theme') === 'dark';
+        if (isCurrentlyDark) {
+            body.removeAttribute('data-theme');
+            icon.className = 'fas fa-moon';
+            localStorage.setItem('darkMode', 'false');
+        } else {
+            body.setAttribute('data-theme', 'dark');
+            icon.className = 'fas fa-sun';
+            localStorage.setItem('darkMode', 'true');
         }
+    });
+}
+</script>
 
-        async function renderBlogList(markdownFiles) {
-            const blogList = document.getElementById('blog-list');
-            let blogListHtml = '';
-
-            const blogPosts = [];
-            
-            for (const file of markdownFiles) {
-                try {
-                    const response = await fetch(`blogs/${file}`);
-                    if (response.ok) {
-                        const content = await response.text();
-                        const { frontmatter, markdown } = parseMarkdownWithFrontmatter(content);
-                        
-                        // Extract excerpt from markdown if not in frontmatter
-                        let excerpt = frontmatter.excerpt || '';
-                        if (!excerpt) {
-                            const firstParagraph = markdown.split('\n\n')[0];
-                            excerpt = firstParagraph.replace(/[#*`]/g, '').substring(0, 200) + '...';
-                        }
-                        
-                        blogPosts.push({
-                            file: file,
-                            title: frontmatter.title || file.replace('.md', '').replace(/-/g, ' '),
-                            date: frontmatter.date || null ,
-                            author: frontmatter.author || 'Author',
-                            excerpt: excerpt,
-                            tags: frontmatter.tags || []
-                        });
-                    }
-                } catch (e) {
-                    console.error(`Error loading ${file}:`, e);
-                }
-            }
-
-            // Sort by date (newest first)
-            blogPosts.sort((a, b) => {
-                if (!a.date) return 1;
-                if (!b.date) return -1;
-                return new Date(b.date) - new Date(a.date);
-        });
-
-
-            const date = post.date
-              ? new Date(post.date).toLocaleDateString('en-US', {
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric'
-                })
-              : '';
-            
-
-                let tagsHtml = '';
-                if (post.tags.length > 0) {
-                    tagsHtml = '<div class="mb-2">';
-                    post.tags.forEach(tag => {
-                        tagsHtml += `<span class="badge bg-dark me-1">${tag}</span>`;
-                    });
-                    tagsHtml += '</div>';
-                }
-
-                blogListHtml += `
-                    <div class="blog-list-item">
-                        <h3><a href="blog.html?post=${post.file}">${post.title}</a></h3>
-                        <p class="blog-date">${date}</p>
-                        ${tagsHtml}
-                        <p>${post.excerpt}</p>
-                        <a href="blog.html?post=${post.file}" class="btn btn-outline-primary">Read Full Post</a>
-                    </div>
-                `;
-            }
-
-            if (blogListHtml === '') {
-                renderNoBlogsFound();
-            } else {
-                blogList.innerHTML = blogListHtml;
-            }
-        }
-
-        function renderNoBlogsFound() {
-            document.getElementById('blog-list').innerHTML = `
-                <div class="text-center">
-                    <i class="fas fa-file-alt fa-4x text-muted mb-3"></i>
-                    <h3>No Blog Posts Found</h3>
-                </div>
-            `;
-        }
-
-        function renderSamplePosts() {
-            document.getElementById('blog-list').innerHTML = `
-                <div class="blog-list-item">
-                    <h3><a href="blogone.html">Understanding Agentic Architectures</a></h3>
-                    <p class="blog-date">December 15, 2025</p>
-                    <p>A deep dive into the various patterns and frameworks for building autonomous AI agents. This post explores the fundamental concepts behind agentic systems and their applications in modern AI research.</p>
-                    <a href="blogone.html" class="btn btn-outline-primary">Read Full Post</a>
-                </div>
-                
-                <div class="blog-list-item">
-                    <h3><a href="blogtwo.html">The Future of AI Security</a></h3>
-                    <p class="blog-date">December 10, 2025</p>
-                    <p>Exploring the challenges and solutions in securing AI systems and agentic protocols. This article discusses emerging threats and best practices for maintaining security in AI deployments.</p>
-                    <a href="blogtwo.html" class="btn btn-outline-primary">Read Full Post</a>
-                </div>
-            `;
-        }
-
-        // Load blog list when page loads
-        document.addEventListener('DOMContentLoaded', loadBlogList);
-        
-        // Dark Mode Functionality
-        function initDarkMode() {
-            const darkModeToggle = document.getElementById('darkModeToggle');
-            if (!darkModeToggle) return;
-            
-            const body = document.body;
-            const icon = darkModeToggle.querySelector('i');
-            
-            // Check for saved dark mode preference
-            const isDarkMode = localStorage.getItem('darkMode') === 'true';
-            
-            // Apply initial theme
-            if (isDarkMode) {
-                body.setAttribute('data-theme', 'dark');
-                icon.className = 'fas fa-sun';
-            }
-            
-            // Toggle dark mode
-            darkModeToggle.addEventListener('click', () => {
-                const isCurrentlyDark = body.getAttribute('data-theme') === 'dark';
-                
-                if (isCurrentlyDark) {
-                    body.removeAttribute('data-theme');
-                    icon.className = 'fas fa-moon';
-                    localStorage.setItem('darkMode', 'false');
-                } else {
-                    body.setAttribute('data-theme', 'dark');
-                    icon.className = 'fas fa-sun';
-                    localStorage.setItem('darkMode', 'true');
-                }
-            });
-        }
-    </script>
 </body>
 </html>
